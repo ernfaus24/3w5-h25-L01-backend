@@ -1,31 +1,76 @@
-# Use the latest 2.1 version of CircleCI pipeline process engine.
-# See: https://circleci.com/docs/reference/configuration-reference
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#jobs-overview & https://circleci.com/docs/reference/configuration-reference/#jobs
+orbs:
+  node: circleci/node@7.2.1
+
 jobs:
-  say-hello:
-    # Specify the execution environment. You can specify an image from Docker Hub or use one of our convenience images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/guides/execution-managed/executor-intro/ & https://circleci.com/docs/reference/configuration-reference/#executor-job
-    docker:
-      # Specify the version you desire here
-      # See: https://circleci.com/developer/images/image/cimg/base
-      - image: cimg/base:current
-
-    # Add steps to the job
-    # See: https://circleci.com/docs/guides/orchestrate/jobs-steps/#steps-overview & https://circleci.com/docs/reference/configuration-reference/#steps
+  checkoutEtTests:
+    executor:
+      name: node/default
+      tag: lts
     steps:
-      # Checkout the code as the first step.
-      - checkout
       - run:
-          name: "Say hello"
-          command: "echo Hello, World!"
+          name: Cloner le repo backend (git clone)
+          command: |
+            git clone https://github.com/ernfaus24/3w5-h25-L01-backend.git 3w5-h25-L01-backend
 
-# Orchestrate jobs using workflows
-# See: https://circleci.com/docs/guides/orchestrate/workflows/ & https://circleci.com/docs/reference/configuration-reference/#workflows
+      - run:
+          name: Installer dépendances + exécuter tests (multi-ligne)
+          command: |
+            cd 3w5-h25-L01-backend
+            npm install
+            npm run test
+
+  integrationFrontend:
+    executor:
+      name: node/default
+      tag: lts
+    steps:
+      - run:
+          name: Cloner backend puis frontend (git clone)
+          command: |
+            git clone https://github.com/ernfaus24/3w5-h25-L01-backend.git 3w5-h25-L01-backend
+            git clone https://github.com/ernfaus24/3w5-h25-L01-frontend.git 3w5-h25-L01-frontend
+
+      - run:
+          name: Installer + build frontend (multi-ligne)
+          command: |
+            cd 3w5-h25-L01-frontend
+            npm install
+            npm run build
+
+      - run:
+          name: Créer backend/public et copier le build (cp -rT)
+          command: |
+            mkdir -p 3w5-h25-L01-backend/public
+            cp -rT 3w5-h25-L01-frontend/build 3w5-h25-L01-backend/public
+
+      - persist_to_workspace:
+          root: .
+          paths:
+            - 3w5-h25-L01-backend
+
+  deploiement:
+    executor:
+      name: node/default
+      tag: lts
+    steps:
+      - attach_workspace:
+          at: .
+
+      - run:
+          name: Vérifier le contenu prêt au déploiement (ls -Rl)
+          command: |
+            cd 3w5-h25-L01-backend
+            ls -Rl
+
 workflows:
-  say-hello-workflow: # This is the name of the workflow, feel free to change it to better match your workflow.
-    # Inside the workflow, you define the jobs you want to run.
+  pipeline-integration:
     jobs:
-      - say-hello
+      - checkoutEtTests
+      - integrationFrontend:
+          requires:
+            - checkoutEtTests
+      - deploiement:
+          requires:
+            - integrationFrontend
